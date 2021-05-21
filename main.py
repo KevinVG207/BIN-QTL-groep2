@@ -29,7 +29,8 @@ def chi_squared(markers):
         length = a + b
         expect_a = length / 2
         expect_b = length / 2
-        chisq = pow((a - expect_a), 2) / expect_a + pow((b - expect_b), 2) / expect_b
+        chisq = pow((a - expect_a), 2) / expect_a + pow((b - expect_b),
+                                                        2) / expect_b
         if chisq <= 3.84:
             new_markers[marker] = markers[marker]
             new_markers[marker].append(chisq)
@@ -40,7 +41,7 @@ def rec_freq(markers):
     keys = list(markers.keys())
     rf_pairs = {}
     for i in range(len(markers)):
-        for j in range(i+1, len(markers)):
+        for j in range(i + 1, len(markers)):
             m1 = markers[keys[i]][0]
             m2 = markers[keys[j]][0]
             tot_len = 0
@@ -62,15 +63,47 @@ def rec_freq(markers):
     return rf_pairs
 
 
+def location(rf_pairs):
+    highest = 0
+    highest_key = ""
+    for key in rf_pairs:
+        if 50 >= rf_pairs[key] > highest:
+            highest = rf_pairs[key]
+            highest_key = key
+        elif rf_pairs[key] > 50:
+            print(str(key) + " heeft een chi squared waarde hoger dan 50, "
+                             "namelijk: " + str(rf_pairs[key]))
+
+    values_list = []
+    for key in rf_pairs:
+        if key[0] == highest_key[0]:
+            values_list.append([key[1], rf_pairs[key]])
+        if key[1] == highest_key[0]:
+            values_list.append([key[0], rf_pairs[key]])
+
+    gene_order = sorted(values_list, key=lambda l: l[1])
+
+    gene_order.insert(0, [highest_key[0], 0])
+
+    return gene_order
+
+
 def main():
     markers = open_markers("markers.txt")
     chisq = chi_squared(markers)
-    for marker in chisq:
-        print(marker, markers[marker])
-    print("\n\n\n")
+    # for marker in chisq:
+    #     print(marker, markers[marker])
+    # print("\n\n\n")
+
     rf_pairs = rec_freq(chisq)
-    for pair in rf_pairs:
-        print(pair, rf_pairs[pair])
+    # for pair in rf_pairs:
+    #     print(pair, rf_pairs[pair])
+    # print("\n\n\n")
+
+    gene_order = location(rf_pairs)
+    print("Gene:\t\tLocatie:")
+    for i in range(len(gene_order)):
+        print(gene_order[i][0] + "\t\t" + str(gene_order[i][1]))
 
 
 if __name__ == '__main__':
