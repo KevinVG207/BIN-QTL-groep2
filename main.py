@@ -1,3 +1,5 @@
+import itertools
+
 def open_markers(filename):
     markers = {}
     try:
@@ -88,80 +90,45 @@ def location(rf_pairs):
     return gene_order
 
 
+def find_distance(marker1, marker2, rf_pairs):
+    markers = [marker1, marker2]
+    for pair in rf_pairs:
+        if pair[0] in markers and pair[1] in markers:
+            return rf_pairs[pair]
+
+
 def refine_location(marker_order, rf_pairs):
-
-    for i in range(len(marker_order) - 2):
-        print("="*10)
-        m1 = marker_order[i][0]
-        m2 = marker_order[i+1][0]
-        m3 = marker_order[i+2][0]
-
-        cur_markers = [m1, m2, m3]
-        cur_rfs = {}
-        for rf_pair in rf_pairs:
-            if rf_pair[0] in cur_markers and rf_pair[1] in cur_markers:
-                cur_rfs[rf_pair] = rf_pairs[rf_pair]
-        print("cur rfs", cur_rfs)
-
-        min_distance = min(cur_rfs, key=cur_rfs.get)
-        other_marker = ""
-        for marker in cur_markers:
-            if marker not in min_distance:
-                other_marker = marker
-                break
-        print("min_dist", min_distance)
-        print("outside marker", other_marker)
-
-        other_distance_pairs = [(other_marker, min_distance[0]), (min_distance[0], other_marker),
-                           (other_marker, min_distance[1]), (min_distance[1], other_marker)]
-
-        outer_distance = {}
-
-        for rf_pair in rf_pairs:
-            if rf_pair in other_distance_pairs:
-                if rf_pair[0] == other_marker:
-                    outer_distance[rf_pair] = rf_pairs[rf_pair]
-                else:
-                    outer_distance[(rf_pair[1], rf_pair[0])] = rf_pairs[rf_pair]
-                if len(outer_distance) == 2:
-                    break
-
-        # print(outer_distance)
-        min_outer_dist = min(outer_distance, key=outer_distance.get)
-        final_order = ["", "", ""]
-        for marker in cur_markers:
-            if marker not in min_outer_dist:
-                final_order[0] = marker
-            elif marker == other_marker:
-                final_order[2] = marker
-            else:
-                final_order[1] = marker
-
-        m1_loc = 0
-        m2_loc = 0
-        for j in range(len(final_order)):
-            if final_order[j] == m1:
-                m1_loc = j
-            elif final_order[j] == m2:
-                m2_loc = j
-
-        if m2_loc < m1_loc:
-            final_order.reverse()
-
-        print(final_order)
-
-        marker_order[i] = [final_order[0], 0]
-        marker_order[i+1] = [final_order[1], 0]
-        marker_order[i+2] = [final_order[2], 0]
-
-    return marker_order
+    marker_list = []
+    for marker in marker_order:
+        marker_list.append(marker[0])
+    print(marker_list)
+    for i in range(4, len(marker_list)):
+        sublist = marker_list[i-4:i]
+        print(sublist)
+        subset_distances = {}
+        for subset in itertools.permutations(sublist):
+            print(subset)
+            cur_distance = 0
+            for j in range(1, len(subset)):
+                cur_distance += find_distance(subset[j-1], subset[j], rf_pairs)
+            subset_distances[subset] = cur_distance
+        shortest = min(subset_distances, key=subset_distances.get)
+        print("====")
+        print(shortest)
+        print(marker_list)
+        if i == 4:
+            print("once")
+            shortest = tuple(list(shortest).__reversed__())
+        marker_list[i-4:i] = list(shortest)
+        print(marker_list)
+    return marker_list
 
 
-def calc_distances(marker_order, rf_pairs):
-    final_distance = [[marker_order[0][0], 0]]
+def calc_distances(marker_list, rf_pairs):
+    final_distance = [[marker_list[0], 0]]
 
-    for i in range(1, len(marker_order)):
-        cur_markers = [marker_order[i-1][0], marker_order[i][0]]
+    for i in range(1, len(marker_list)):
+        cur_markers = [marker_list[i-1], marker_list[i]]
         for rf_pair in rf_pairs:
             if rf_pair[0] in cur_markers and rf_pair[1] in cur_markers:
                 final_distance.append([cur_markers[1], rf_pairs[rf_pair]])
@@ -193,8 +160,10 @@ def main():
 
     distances = calc_distances(marker_order, rf_pairs)
 
+    cur_dist = 0
     for marker in distances:
-        print(str(marker[0]) + "\t\t" + str(marker[1]))
+        cur_dist += marker[1]
+        print(str(marker[0]) + "\t\t" + str(cur_dist))
 
 
 if __name__ == '__main__':
