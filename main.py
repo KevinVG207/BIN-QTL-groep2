@@ -71,7 +71,7 @@ def location(rf_pairs):
             highest = rf_pairs[key]
             highest_key = key
         elif rf_pairs[key] > 50:
-            print(str(key) + " heeft een chi squared waarde hoger dan 50, "
+            print(str(key) + " heeft een rf-waarde hoger dan 50, "
                              "namelijk: " + str(rf_pairs[key]))
 
     values_list = []
@@ -88,6 +88,87 @@ def location(rf_pairs):
     return gene_order
 
 
+def refine_location(marker_order, rf_pairs):
+
+    for i in range(len(marker_order) - 2):
+        print("="*10)
+        m1 = marker_order[i][0]
+        m2 = marker_order[i+1][0]
+        m3 = marker_order[i+2][0]
+
+        cur_markers = [m1, m2, m3]
+        cur_rfs = {}
+        for rf_pair in rf_pairs:
+            if rf_pair[0] in cur_markers and rf_pair[1] in cur_markers:
+                cur_rfs[rf_pair] = rf_pairs[rf_pair]
+        print("cur rfs", cur_rfs)
+
+        min_distance = min(cur_rfs, key=cur_rfs.get)
+        other_marker = ""
+        for marker in cur_markers:
+            if marker not in min_distance:
+                other_marker = marker
+                break
+        print("min_dist", min_distance)
+        print("outside marker", other_marker)
+
+        other_distance_pairs = [(other_marker, min_distance[0]), (min_distance[0], other_marker),
+                           (other_marker, min_distance[1]), (min_distance[1], other_marker)]
+
+        outer_distance = {}
+
+        for rf_pair in rf_pairs:
+            if rf_pair in other_distance_pairs:
+                if rf_pair[0] == other_marker:
+                    outer_distance[rf_pair] = rf_pairs[rf_pair]
+                else:
+                    outer_distance[(rf_pair[1], rf_pair[0])] = rf_pairs[rf_pair]
+                if len(outer_distance) == 2:
+                    break
+
+        # print(outer_distance)
+        min_outer_dist = min(outer_distance, key=outer_distance.get)
+        final_order = ["", "", ""]
+        for marker in cur_markers:
+            if marker not in min_outer_dist:
+                final_order[0] = marker
+            elif marker == other_marker:
+                final_order[2] = marker
+            else:
+                final_order[1] = marker
+
+        m1_loc = 0
+        m2_loc = 0
+        for j in range(len(final_order)):
+            if final_order[j] == m1:
+                m1_loc = j
+            elif final_order[j] == m2:
+                m2_loc = j
+
+        if m2_loc < m1_loc:
+            final_order.reverse()
+
+        print(final_order)
+
+        marker_order[i] = [final_order[0], 0]
+        marker_order[i+1] = [final_order[1], 0]
+        marker_order[i+2] = [final_order[2], 0]
+
+    return marker_order
+
+
+def calc_distances(marker_order, rf_pairs):
+    final_distance = [[marker_order[0][0], 0]]
+
+    for i in range(1, len(marker_order)):
+        cur_markers = [marker_order[i-1][0], marker_order[i][0]]
+        for rf_pair in rf_pairs:
+            if rf_pair[0] in cur_markers and rf_pair[1] in cur_markers:
+                final_distance.append([cur_markers[1], rf_pairs[rf_pair]])
+                break
+    return final_distance
+
+
 def main():
     markers = open_markers("markers.txt")
     chisq = chi_squared(markers)
@@ -100,10 +181,20 @@ def main():
     #     print(pair, rf_pairs[pair])
     # print("\n\n\n")
 
-    gene_order = location(rf_pairs)
-    print("Gene:\t\tLocatie:")
-    for i in range(len(gene_order)):
-        print(gene_order[i][0] + "\t\t" + str(gene_order[i][1]))
+    rough_marker_order = location(rf_pairs)
+
+    for marker in rough_marker_order:
+        print(str(marker[0]) + "\t\t" + str(marker[1]))
+    print("\n\n")
+
+    marker_order = refine_location(rough_marker_order, rf_pairs)
+
+    print(marker_order)
+
+    distances = calc_distances(marker_order, rf_pairs)
+
+    for marker in distances:
+        print(str(marker[0]) + "\t\t" + str(marker[1]))
 
 
 if __name__ == '__main__':
