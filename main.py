@@ -1,7 +1,14 @@
+from datetime import datetime
+
+min_dist = -1
+min_list = []
+children = 0
+
+
 def open_markers(filename):
     markers = {}
     try:
-        with open("markers.txt", "r") as f:
+        with open(filename, "r") as f:
             lines = f.readlines()
             cur_marker = ""
             cur_marker_name = ""
@@ -34,6 +41,9 @@ def chi_squared(markers):
         if chisq <= 3.84:
             new_markers[marker] = markers[marker]
             new_markers[marker].append(chisq)
+        else:
+            print(f"Marker discarded:\t{marker}\t{chisq}")
+    print(f"Amount of markers:\t{len(new_markers)}")
     return new_markers
 
 
@@ -63,105 +73,18 @@ def rec_freq(markers):
     return rf_pairs
 
 
-def location(rf_pairs):
-    highest = 0
-    highest_key = ""
-    for key in rf_pairs:
-        if 50 >= rf_pairs[key] > highest:
-            highest = rf_pairs[key]
-            highest_key = key
-        elif rf_pairs[key] > 50:
-            print(str(key) + " heeft een rf-waarde hoger dan 50, "
-                             "namelijk: " + str(rf_pairs[key]))
-
-    values_list = []
-    for key in rf_pairs:
-        if key[0] == highest_key[0]:
-            values_list.append([key[1], rf_pairs[key]])
-        if key[1] == highest_key[0]:
-            values_list.append([key[0], rf_pairs[key]])
-
-    gene_order = sorted(values_list, key=lambda l: l[1])
-
-    gene_order.insert(0, [highest_key[0], 0])
-
-    return gene_order
+def refine_location(markers_filtered, rf_pairs):
+    for marker in markers_filtered:
+        print(marker)
+        Fork([marker], 0, rf_pairs)
+    return
 
 
-def refine_location(marker_order, rf_pairs):
+def calc_distances(marker_list, rf_pairs):
+    final_distance = [[marker_list[0], 0]]
 
-    for i in range(len(marker_order) - 2):
-        print("="*10)
-        m1 = marker_order[i][0]
-        m2 = marker_order[i+1][0]
-        m3 = marker_order[i+2][0]
-
-        cur_markers = [m1, m2, m3]
-        cur_rfs = {}
-        for rf_pair in rf_pairs:
-            if rf_pair[0] in cur_markers and rf_pair[1] in cur_markers:
-                cur_rfs[rf_pair] = rf_pairs[rf_pair]
-        print("cur rfs", cur_rfs)
-
-        min_distance = min(cur_rfs, key=cur_rfs.get)
-        other_marker = ""
-        for marker in cur_markers:
-            if marker not in min_distance:
-                other_marker = marker
-                break
-        print("min_dist", min_distance)
-        print("outside marker", other_marker)
-
-        other_distance_pairs = [(other_marker, min_distance[0]), (min_distance[0], other_marker),
-                           (other_marker, min_distance[1]), (min_distance[1], other_marker)]
-
-        outer_distance = {}
-
-        for rf_pair in rf_pairs:
-            if rf_pair in other_distance_pairs:
-                if rf_pair[0] == other_marker:
-                    outer_distance[rf_pair] = rf_pairs[rf_pair]
-                else:
-                    outer_distance[(rf_pair[1], rf_pair[0])] = rf_pairs[rf_pair]
-                if len(outer_distance) == 2:
-                    break
-
-        # print(outer_distance)
-        min_outer_dist = min(outer_distance, key=outer_distance.get)
-        final_order = ["", "", ""]
-        for marker in cur_markers:
-            if marker not in min_outer_dist:
-                final_order[0] = marker
-            elif marker == other_marker:
-                final_order[2] = marker
-            else:
-                final_order[1] = marker
-
-        m1_loc = 0
-        m2_loc = 0
-        for j in range(len(final_order)):
-            if final_order[j] == m1:
-                m1_loc = j
-            elif final_order[j] == m2:
-                m2_loc = j
-
-        if m2_loc < m1_loc:
-            final_order.reverse()
-
-        print(final_order)
-
-        marker_order[i] = [final_order[0], 0]
-        marker_order[i+1] = [final_order[1], 0]
-        marker_order[i+2] = [final_order[2], 0]
-
-    return marker_order
-
-
-def calc_distances(marker_order, rf_pairs):
-    final_distance = [[marker_order[0][0], 0]]
-
-    for i in range(1, len(marker_order)):
-        cur_markers = [marker_order[i-1][0], marker_order[i][0]]
+    for i in range(1, len(marker_list)):
+        cur_markers = [marker_list[i-1], marker_list[i]]
         for rf_pair in rf_pairs:
             if rf_pair[0] in cur_markers and rf_pair[1] in cur_markers:
                 final_distance.append([cur_markers[1], rf_pairs[rf_pair]])
@@ -169,33 +92,95 @@ def calc_distances(marker_order, rf_pairs):
     return final_distance
 
 
+class Fork:
+    def __init__(self, cur_list, cur_dist, rf_pairs):
+        global min_dist
+        global min_list
+        global children
+        children += 1
+        if children % 100000 == 0:
+            print(children)
+        self.cur_list = cur_list
+        self.marker = cur_list[-1]
+        self.cur_dist = cur_dist
+        self.encounters = 0
+        for rf_pair in rf_pairs:
+            if rf_pair[0] == self.marker or rf_pair[1] == self.marker:
+                if rf_pair[0] == self.marker:
+                    self.do(rf_pair[1], rf_pairs, rf_pair)
+                else:
+                    self.do(rf_pair[0], rf_pairs, rf_pair)
+        if self.encounters == 0:
+            # Looped through all
+            self.finish()
+
+    def do(self, child_marker, rf_pairs, rf_pair):
+        global min_dist
+        if child_marker not in self.cur_list:
+            add_dist = rf_pairs[rf_pair]
+            self.encounters += 1
+            new_dist = self.cur_dist + add_dist
+            if new_dist < min_dist or min_dist == -1:
+                new_list = []
+                for marker in self.cur_list:
+                    new_list.append(marker)
+                new_list.append(child_marker)
+                child = Fork(new_list, new_dist, rf_pairs)
+        return
+
+    def finish(self):
+        global min_list
+        global min_dist
+        if self.cur_dist < min_dist or min_dist == -1:
+            min_dist = self.cur_dist
+            min_list = self.cur_list
+            print(min_dist, min_list)
+        return
+
+
 def main():
+    global min_list
+    global min_dist
+
     markers = open_markers("markers.txt")
+    print(markers)
     chisq = chi_squared(markers)
     # for marker in chisq:
     #     print(marker, markers[marker])
     # print("\n\n\n")
+
+    markers_filtered = list(chisq.keys())
 
     rf_pairs = rec_freq(chisq)
     # for pair in rf_pairs:
     #     print(pair, rf_pairs[pair])
     # print("\n\n\n")
 
-    rough_marker_order = location(rf_pairs)
+    refine_location(markers_filtered, rf_pairs)
 
-    for marker in rough_marker_order:
-        print(str(marker[0]) + "\t\t" + str(marker[1]))
-    print("\n\n")
+    print(min_list)
+    print(min_dist)
 
-    marker_order = refine_location(rough_marker_order, rf_pairs)
+    distances = calc_distances(min_list, rf_pairs)
 
-    print(marker_order)
-
-    distances = calc_distances(marker_order, rf_pairs)
-
+    cur_dist = 0
     for marker in distances:
-        print(str(marker[0]) + "\t\t" + str(marker[1]))
+        cur_dist += marker[1]
+        print(str(marker[0]) + "\t\t" + str(cur_dist))
+
+    with open("output.txt", "w") as f:
+        f.write("group chromosoom\n\n")
+        cur_dist = 0
+        for marker in distances:
+            cur_dist += marker[1]
+            f.write(str(marker[0]) + "\t" + str(cur_dist) + "\n")
 
 
 if __name__ == '__main__':
+    first = datetime.now()
+
     main()
+
+    second = datetime.now()
+    difference = second - first
+    print(difference)
