@@ -1,11 +1,19 @@
 from datetime import datetime
 
+# Global variables for classes to reach
 min_dist = -1
 min_list = []
 children = 0
 
 
 def open_markers(filename):
+    """
+    Opens marker file and adds all markers to dictionary with
+        key: Marker name
+        value: Marker data (in list)
+    :param filename: String - Path to open
+    :return: Dictionary - { String : [String] }
+    """
     markers = {}
     try:
         with open(filename, "r") as f:
@@ -28,6 +36,14 @@ def open_markers(filename):
 
 
 def chi_squared(markers):
+    """
+    Calculates chi-squared values based on amount of a and b in the marker data.
+    Markers with chi-squared value > 3.84 are discarded.
+    :param markers: Dictionary - Markers
+    :return: Dictionary - Markers with:
+        key: Marker name
+        value: [Marker data, chisq value]
+    """
     new_markers = {}
     for marker in markers:
         line = markers[marker][0]
@@ -48,6 +64,14 @@ def chi_squared(markers):
 
 
 def rec_freq(markers):
+    """
+    Calculates recombination frequency between all combinations
+    of two markers.
+    :param markers: Dictionary - Marker data
+    :return: Dictionary with:
+        key: (marker1, marker2)
+        value: rf frequency (or distance in cM)
+    """
     keys = list(markers.keys())
     rf_pairs = {}
     for i in range(len(markers)):
@@ -74,6 +98,13 @@ def rec_freq(markers):
 
 
 def refine_location(markers_filtered, rf_pairs):
+    """
+    Find the shortest total distance between markers.
+    Distance calculated from one marker to the next.
+    :param markers_filtered: List of marker names.
+    :param rf_pairs: Recombination frequency pairs.
+    :return: - (Output is stored in global variables min_dist and min_list)
+    """
     for marker in markers_filtered:
         print(marker)
         Fork([marker], 0, rf_pairs)
@@ -81,6 +112,12 @@ def refine_location(markers_filtered, rf_pairs):
 
 
 def calc_distances(marker_list, rf_pairs):
+    """
+    Calculates the distances between a list of markers from the first marker.
+    :param marker_list: Dictionary - Marker list
+    :param rf_pairs: Dictionary - Recombination frequency pairs.
+    :return: Nested list: [ [marker name, distance from start], [...] ]
+    """
     final_distance = [[marker_list[0], 0]]
 
     for i in range(1, len(marker_list)):
@@ -93,6 +130,14 @@ def calc_distances(marker_list, rf_pairs):
 
 
 class Fork:
+    """
+    This class recursively loops over every combination of all markers.
+    It creates children of itself.
+    If a full list is found and it is shorter than min_dist:
+        set min_dist and min_list to the list found.
+    If at any point the cur_dist is larger than min_dist:
+        Stop and go up a level.
+    """
     def __init__(self, cur_list, cur_dist, rf_pairs):
         global min_dist
         global min_list
@@ -104,6 +149,8 @@ class Fork:
         self.marker = cur_list[-1]
         self.cur_dist = cur_dist
         self.encounters = 0
+
+        # Loop through all pairs that has itself.
         for rf_pair in rf_pairs:
             if rf_pair[0] == self.marker or rf_pair[1] == self.marker:
                 if rf_pair[0] == self.marker:
@@ -111,10 +158,14 @@ class Fork:
                 else:
                     self.do(rf_pair[0], rf_pairs, rf_pair)
         if self.encounters == 0:
-            # Looped through all
+            # Looped through all.
             self.finish()
 
     def do(self, child_marker, rf_pairs, rf_pair):
+        """
+        If current distance is shorter than minimum distance:
+            Create a new child.
+        """
         global min_dist
         if child_marker not in self.cur_list:
             add_dist = rf_pairs[rf_pair]
@@ -129,6 +180,10 @@ class Fork:
         return
 
     def finish(self):
+        """
+        Full list found. Now check if it is actually the shortest.
+        If so: overwrite shortest variables.
+        """
         global min_list
         global min_dist
         if self.cur_dist < min_dist or min_dist == -1:
@@ -142,27 +197,29 @@ def main():
     global min_list
     global min_dist
 
+    # Open markers
     markers = open_markers("markers.txt")
     print(markers)
-    chisq = chi_squared(markers)
-    # for marker in chisq:
-    #     print(marker, markers[marker])
-    # print("\n\n\n")
 
+    # Calc chisq and get list of marker names for later.
+    chisq = chi_squared(markers)
     markers_filtered = list(chisq.keys())
 
+    # Calculate recombination frequency
     rf_pairs = rec_freq(chisq)
-    # for pair in rf_pairs:
-    #     print(pair, rf_pairs[pair])
-    # print("\n\n\n")
 
+    # Find the shortest distance from one marker to the next.
+    # (Doesn't necessarily mean shortest from first to last!)
     refine_location(markers_filtered, rf_pairs)
 
+    # Print output for debug.
     print(min_list)
     print(min_dist)
 
+    # Calculate final distances for MapChart file.
     distances = calc_distances(min_list, rf_pairs)
 
+    # Print output and save to file.
     cur_dist = 0
     for marker in distances:
         cur_dist += marker[1]
@@ -177,6 +234,8 @@ def main():
 
 
 if __name__ == '__main__':
+    # Also keep track of time.
+    # Testing showed it takes about 3 minutes in the given marker ordering
     first = datetime.now()
 
     main()
